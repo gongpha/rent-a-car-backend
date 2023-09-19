@@ -10,7 +10,7 @@ def customer_by_id(customer_id = None) :
 
     # ดึงข้อมูลลูกค้าตาม ID ที่ระบุ
     result = execute_sql_one("SELECT * FROM customers WHERE customer_id = %s", customer_id)
-    if result == None : # หาไม่เจอ
+    if result is None : # หาไม่เจอ
         return {"error" : "Customer not found"}, 404
     
     # ดึงเบอร์มา

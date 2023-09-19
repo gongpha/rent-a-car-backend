@@ -1,6 +1,7 @@
 """ สร้าง Flask App ขึ้นมา และกำหนดค่าต่าง ๆ ที่จำเป็น """
 import os
 from flask import Flask, redirect
+from flask_cors import CORS
 from dotenv import load_dotenv
 
 # modules
@@ -17,6 +18,7 @@ load_dotenv()
 def init_app() -> Flask :
     """ initialize the flask app """
     app = Flask(__name__)
+    CORS(app)
 
     # ตั้งค่าให้เชื่อมกับฐานข้อมูล
     # ค่าทั้งหมดอยู่ในไฟล์ .env ของ Server ; อย่าปล่อยให้หลุดออกมาเด็ดขาด !
