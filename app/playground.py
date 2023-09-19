@@ -13,3 +13,7 @@ def test() :
 def bruh() :
     """ ปล่อย JSON ออกไปว่า bruh """
     return {"message" : "bruh"}
+
+@bp.route('/gay')
+def index():
+    return 'GAY GAY GAY'
