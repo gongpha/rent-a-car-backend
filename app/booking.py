@@ -7,10 +7,11 @@ bp = Blueprint('booking', __name__)
 @bp.route("/branches", methods=["GET"])
 def branches() :
     """ branch ทั้งหมด """
-    results = execute_sql("SELECT branch_id, name, manager_employee_id FROM branches")
+    results = execute_sql("SELECT branch_id, name, location FROM branches")
     return {"branches" : [{
         "branch_id" : x[0],
-        "branch_name" : x[1]
+        "branch_name" : x[1],
+        "location" : x[2]
     } for x in results]}
 
 @bp.route("/reservation/<reservation_id>/summary", methods=["GET"])
