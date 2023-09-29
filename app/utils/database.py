@@ -31,3 +31,8 @@ def execute_sql_one(sql : str, *args) :
     cursor.execute(sql, args)
     output = cursor.fetchone()
     return output # return เป็น tuple หรือ None ถ้าไม่เจอ
+
+def commit_sql(sql : str, *args) :
+    cursor = mysql.get_db().cursor()
+    cursor.execute(sql, args)
+    mysql.get_db().commit()
