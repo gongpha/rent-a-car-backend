@@ -5,10 +5,14 @@ import os
 import json
 from flask import redirect, request, current_app, jsonify
 from datetime import datetime, timezone, timedelta
+from functools import wraps
+from app.utils.database import execute_sql_one
 
 from flask_jwt_extended import (
     create_access_token, jwt_required, get_jwt_identity,
-    set_access_cookies, unset_jwt_cookies, get_jwt
+    set_access_cookies, unset_jwt_cookies, get_jwt,
+
+    verify_jwt_in_request
 )
 
 from app.models.account import Account
@@ -82,7 +86,12 @@ def google_login_auth() :
 
     # login
     # imma make a token
-    token = create_access_token(identity=userdata["email"])
+    token = create_access_token(
+        identity=userdata["email"], additional_claims={
+            "type" : "user",
+            "role" : "customer"
+        }
+    )
 
     # go bacc
     resp = jsonify({
@@ -96,6 +105,25 @@ def logout() :
     response = jsonify({"return": "LOGGED_OUT"})
     unset_jwt_cookies(response) # goodbye token
     return response
+
+def user_required():
+    def wrapper(fn):
+        @wraps(fn)
+        def decorator(*args, **kwargs):
+            verify_jwt_in_request()
+            claims = get_jwt()
+            if claims["type"] == "user" :
+                return fn(*args, **kwargs)
+            else:
+                response = jsonify({
+                    "return" : "ERROR",
+                    "error" : "User-only endpoint"
+                })
+                return response, 403
+
+        return decorator
+
+    return wrapper
 
 # @bp.after_request
 # def refresh_jwt(response) :
@@ -116,7 +144,7 @@ def logout() :
 #################
 
 @bp.route("/profile/button", methods=["GET"])
-@jwt_required()
+@user_required()
 def profile_button() :
     """ profile button """
     acc = Account.get_by_email(get_jwt_identity())
@@ -131,4 +159,136 @@ def profile_button() :
         
         "displayname" : acc.display_name,
         "picture" : acc.pfp_url
+    }
+
+#################
+# ADMIN
+
+import hashlib
+from .models.accountemp import AccountEmp
+
+@bp.route("/admin/login", methods=["POST"])
+def admin_login() :
+    """ admin login """
+    json_data = request.get_json(force=True)
+    username = json_data.get("username")
+    password = json_data.get("password")
+
+    if not username or not password :
+        return {
+            "return" : "ERROR",
+            "error" : "Missing username or password."
+        }, 400
+
+    password_md5 = hashlib.md5(password.encode()).hexdigest()
+
+    acc = AccountEmp.get_by_username(username)
+
+    # fixme : merge with the below ?
+    if not acc :
+        return {
+            "return" : "ERROR",
+            "error" : "Account not found."
+        }, 404
+    if acc.password_md5 != password_md5 :
+        return {
+            "return" : "ERROR",
+            "error" : "Incorrect password."
+        }, 401
+
+    # yee
+    token = create_access_token(identity=username, additional_claims={
+        "type" : "admin",
+        "role" : acc.employee.role
+    })
+
+    resp = jsonify({
+        "return" : "GRANTED"
+    })
+    set_access_cookies(resp, token, )
+    return resp, 200
+
+def admin_required():
+    def wrapper(fn):
+        @wraps(fn)
+        def decorator(*args, **kwargs):
+            verify_jwt_in_request()
+            claims = get_jwt()
+            if claims["type"] == "admin":
+                return fn(*args, **kwargs)
+            else:
+                response = jsonify({
+                    "return" : "ERROR",
+                    "error" : "Admin-only endpoint"
+                })
+                return response, 403
+
+        return decorator
+
+    return wrapper
+
+def manager_required():
+    def wrapper(fn):
+        @wraps(fn)
+        def decorator(*args, **kwargs):
+            verify_jwt_in_request()
+            claims = get_jwt()
+            if claims["type"] == "admin":
+                if claims["role"] == "MANAGER" :
+                    return fn(*args, **kwargs)
+            response = jsonify({
+                "return" : "ERROR",
+                "error" : "Manager-only endpoint"
+            })
+            return response, 403
+
+        return decorator
+
+    return wrapper
+
+def root_required():
+    def wrapper(fn):
+        @wraps(fn)
+        def decorator(*args, **kwargs):
+            verify_jwt_in_request()
+            claims = get_jwt()
+            if claims["type"] == "admin":
+                if claims["role"] == "ROOT" :
+                    return fn(*args, **kwargs)
+            response = jsonify({
+                "return" : "ERROR",
+                "error" : "Root-only endpoint"
+            })
+            return response, 403
+
+        return decorator
+
+    return wrapper
+
+@bp.route("/admin/me", methods=["GET"])
+@admin_required()
+def admin_me() :
+    """ admin me """
+
+    acc = execute_sql_one(
+        "SELECT username, e_first_name, e_last_name, name FROM employees"
+        " JOIN web_accounts_emp USING (employee_id)"
+        " JOIN branches USING (branch_id)"
+        " WHERE username = %s"
+        , get_jwt_identity()
+    )
+
+    if not acc :
+        return {
+            "return" : "ERROR",
+            "error" : "Account not found."
+        }, 404
+
+    return {
+        "return" : "OK",
+        
+        "username" : acc[0],
+        "first_name" : acc[1],
+        "last_name" : acc[2],
+        "branch_name" : acc[3]
     }

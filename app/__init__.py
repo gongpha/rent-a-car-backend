@@ -14,6 +14,8 @@ from app.playground import bp as playground_bp
 from app.auth import bp as auth_bp
 from app.booking import bp as booking_bp
 from app.customer import bp as customer_bp
+from app.cars import bp as cars_bp
+from app.reservations import bp as reservations_bp
 
 from .utils.database import init_db
 
@@ -35,6 +37,8 @@ def init_app() -> Flask :
     app.config["JWT_SECRET_KEY"] = secrets.token_bytes(16) # os.urandom(16)
     app.config["JWT_ACCESS_TOKEN_EXPIRES"] = timedelta(hours=1)
 
+    app.config["JWT_COOKIE_SAMESITE"] = "None"
+
     app.jwt = JWTManager(app)
 
     # login system
@@ -54,6 +58,8 @@ def init_app() -> Flask :
     app.register_blueprint(auth_bp)
     app.register_blueprint(booking_bp)
     app.register_blueprint(customer_bp)
+    app.register_blueprint(cars_bp)
+    app.register_blueprint(reservations_bp)
     
     app.register_blueprint(playground_bp)
 

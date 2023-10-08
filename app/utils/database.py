@@ -36,3 +36,9 @@ def commit_sql(sql : str, *args) :
     cursor = mysql.get_db().cursor()
     cursor.execute(sql, args)
     mysql.get_db().commit()
+
+def commit_sqls(sqls : list[str], argss : list[tuple]) :
+    cursor = mysql.get_db().cursor()
+    for s, a in zip(sqls, argss) :
+        cursor.execute(s, a)
+    mysql.get_db().commit()
