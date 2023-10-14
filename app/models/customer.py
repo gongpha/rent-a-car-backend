@@ -31,6 +31,25 @@ class Customer() :
         return cust
     
     @staticmethod
+    def get_by_email(email) :
+        cust = execute_sql_one(
+            "SELECT * FROM customers WHERE c_email = %s"
+            , email
+        )
+        if not cust :
+            return None
+        
+        cust = Customer(
+            id_=cust[0],
+            first_name=cust[1],
+            last_name=cust[2],
+            email=cust[3],
+            phone=cust[4],
+            driving_license=cust[5]
+        )
+        return cust
+    
+    @staticmethod
     def create(first_name, last_name, email, phone, driving_license) :
         """ create a new customer """
         commit_sql(

@@ -15,50 +15,146 @@ bp = Blueprint('cars', __name__)
 @bp.route("/cars/<from_branch>", methods=["GET"])
 def cars(from_branch=0) :
     """ รถทั้งหมด """
-    base =  "SELECT car_id, license_plate, brand, model, car_type, year, seats, fuel_type, price_per_day,"\
-    "image_car FROM cars JOIN car_models USING (model_id) WHERE car_status = \"not_reserve\" AND branch_id = %s"
+    base =  "SELECT car_id, brand, model, car_type, year, seats, fuel_type, price_per_day, gear,"\
+    "image_car FROM cars JOIN car_models USING (model_id)"
 
     args = [from_branch]
+    largs = []
+
+    filter_base = " WHERE car_status = \"not_reserve\" AND branch_id = %s"
+    limit = ""
 
     if request.args.get("carType") is not None :
-        base += " AND car_type = %s"
+        filter_base += " AND car_type = %s"
         args.append(request.args.get("carType"))
 
     if request.args.get("minPrice") is not None :
-        base += " AND price_per_day >= %s"
+        filter_base += " AND price_per_day >= %s"
         args.append(request.args.get("minPrice"))
 
     if request.args.get("maxPrice") is not None :
-        base += " AND price_per_day <= %s"
+        filter_base += " AND price_per_day <= %s"
         args.append(request.args.get("maxPrice"))
 
     if request.args.get("seats") is not None :
-        base += " AND seats >= %s"
+        filter_base += " AND seats >= %s"
         args.append(request.args.get("seats"))
 
+    if request.args.get("fuelType") is not None :
+        filter_base += " AND fuel_type = %s"
+        args.append(request.args.get("fuelType"))
+
+    if request.args.get("brand") is not None :
+        filter_base += " AND brand = %s"
+        args.append(request.args.get("brand"))
+
+    try :
+        if request.args.get("limit") is not None :
+            limit += " LIMIT %s"
+            largs.append(int(request.args.get("limit")))
+
+            if request.args.get("offset") is not None :
+                limit += " OFFSET %s"
+                largs.append(int(request.args.get("offset")))
+    except ValueError :
+        return {"error" : "Invalid limit/offset"}, 400
+    
+    # filters
+    filterFuels = request.args.getlist("filterFuels[]")
+    if len(filterFuels) > 0 :
+        filter_base += " AND fuel_type IN (" + ",".join(["%s"] * len(filterFuels)) + ")"
+        args += filterFuels
+
+    filterCarTypes = request.args.getlist("filterCarTypes[]")
+    if len(filterCarTypes) > 0 :
+        filter_base += " AND car_type IN (" + ",".join(["%s"] * len(filterCarTypes)) + ")"
+        args += filterCarTypes
+
+    filterGears = request.args.getlist("filterGears[]")
+    if len(filterGears) > 0 :
+        filter_base += " AND gear IN (" + ",".join(["%s"] * len(filterGears)) + ")"
+        args += filterGears
+
+    filterBrands = request.args.getlist("filterBrands[]")
+    if len(filterBrands) > 0 :
+        filter_base += " AND brand IN (" + ",".join(["%s"] * len(filterBrands)) + ")"
+        args += filterBrands
+
+    sorting = ""
+
+    sortBy = request.args.get("sortBy")
+    if sortBy is not None :
+        if sortBy == "price" :
+            sorting += " ORDER BY price_per_day"
+        elif sortBy == "seats" :
+            sorting += " ORDER BY seats"
+        elif sortBy == "year" :
+            sorting += " ORDER BY year"
+        elif sortBy == "brand" :
+            sorting += " ORDER BY brand"
+        elif sortBy == "model" :
+            sorting += " ORDER BY model"
+        else :
+            return {"error" : "Invalid sortBy"}, 400
+
+        if request.args.get("sortDesc") is not None :
+            sorting += " DESC"
+
     results = execute_sql(
-        base,
+        base + filter_base + sorting + limit,
+        *(args + largs)
+    )
+
+    count = execute_sql_one(
+        "SELECT COUNT(*) FROM cars JOIN car_models USING (model_id)" + filter_base,
         *args
     )
-    return [{
-        "car_id" : x[0],
-        "license_plate" : x[1],
-        "brand" : x[2],
-        "model" : x[3],
-        "car_type" : x[4],
-        "year" : x[5],
-        "seats" : x[6],
-        "fuel_type" : x[7],
-        "price_per_day" : x[8],
-        "image_car" : x[9],
-    } for x in results]
+    return {
+        'total' : count[0],
+        'cars' : [{
+            "car_id" : x[0],
+            "brand" : x[1],
+            "model" : x[2],
+            "car_type" : x[3],
+            "year" : x[4],
+            "seats" : x[5],
+            "fuel_type" : x[6],
+            "price_per_day" : x[7],
+            "gear" : x[8],
+            "car_image" : x[9]
+        } for x in results]
+    }
+
+@bp.route("/priceshist/<branch_id>", methods=["GET"])
+def priceshist(branch_id=0) :
+    """ ราคาทั้งหมดสำหรับการค้นหา """
+    results = execute_sql(
+        "SELECT price_per_day, COUNT(price_per_day) FROM ("
+        " SELECT price_per_day FROM cars"
+        " JOIN car_models USING (model_id)"
+        " WHERE branch_id = %s"
+        " ) a"
+        " GROUP BY price_per_day",
+        branch_id
+    )
+
+    return list(results)
+
+@bp.route("/brandlist", methods=["GET"])
+def brandlist() :   
+    """ ยี่ห้อทั้งหมดสำหรับการค้นหา """
+    results = [x[0] for x in execute_sql(
+        "SELECT DISTINCT brand FROM cars JOIN car_models USING (model_id)"
+    )]
+
+    return list(results)
 
 @bp.route("/car/<car_id>", methods=["GET"])
 def car(car_id=0) :
     """ รถ """
 
     x = execute_sql_one(
-        "SELECT car_id, license_plate, brand, model, car_type, year, seats, fuel_type, price_per_day,"\
+        "SELECT car_id, license_plate, brand, model, car_type, year, seats, fuel_type, price_per_day, gear,"\
         "image_car, car_status FROM cars JOIN car_models USING (model_id) WHERE car_id = %s", car_id
     )
     if not x :
@@ -73,8 +169,9 @@ def car(car_id=0) :
         "seats" : x[6],
         "fuel_type" : x[7],
         "price_per_day" : x[8],
-        "image_car" : x[9],
-        "car_status" : x[10]
+        "gear" : x[9],
+        "car_image" : x[10],
+        "car_status" : x[11]
     }
 
 @bp.route("/admin/cars", methods=["GET"])
@@ -86,7 +183,7 @@ def admin_cars() :
     username = get_jwt_identity()
     results = execute_sql(
         "SELECT"
-        " car_id, license_plate, mileage, brand, model, car_type, year, seats, fuel_type, price_per_day, image_car, car_status"
+        " car_id, license_plate, mileage, brand, model, car_type, year, seats, fuel_type, price_per_day, gear, image_car, car_status"
         " FROM cars JOIN car_models USING (model_id) WHERE branch_id = ("
         " SELECT branch_id FROM employees WHERE employee_id = ("
         " SELECT employee_id FROM web_accounts_emp WHERE username = %s"
@@ -104,8 +201,9 @@ def admin_cars() :
         "seats" : x[7],
         "fuel_type" : x[8],
         "price_per_day" : x[9],
-        "image_car" : x[10],
-        "car_status" : x[11]
+        "gear" : x[10],
+        "image_car" : x[11],
+        "car_status" : x[12]
     } for x in results]
 
 @bp.route("/admin/cars/<from_branch>", methods=["GET"])
@@ -114,7 +212,7 @@ def admin_cars_branch(from_branch=0) :
     """ รถทั้งหมดตามสาขา (มุมมองของพนักงาน) """
     results = execute_sql(
         "SELECT"
-        " car_id, license_plate, mileage, brand, model, car_type, year, seats, fuel_type, price_per_day, image_car, car_status"
+        " car_id, license_plate, mileage, brand, model, car_type, year, seats, fuel_type, price_per_day, gear, image_car, car_status"
         " FROM cars JOIN car_models USING (model_id) WHERE branch_id = %s", from_branch
     )
     return [{
@@ -128,8 +226,9 @@ def admin_cars_branch(from_branch=0) :
         "seats" : x[7],
         "fuel_type" : x[8],
         "price_per_day" : x[9],
-        "image_car" : x[10],
-        "car_status" : x[11]
+        "gear" : x[10],
+        "image_car" : x[11],
+        "car_status" : x[12]
     } for x in results]
 
 @bp.route("/admin/car/<car_id>", methods=["GET"])
@@ -140,7 +239,7 @@ def admin_car(car_id=0) :
     if get_jwt()["role"] == "ROOT" :
         x = execute_sql_one(
             "SELECT"
-            " c.car_id, c.license_plate, c.mileage, c.image_car, c.car_status, c.model_id, brand, model, year, r.reservation_id"
+            " c.car_id, c.license_plate, c.mileage, c.image_car, c.gear, c.car_status, c.model_id, brand, model, year, r.reservation_id"
             " FROM cars c"
             " JOIN car_models USING (model_id)"
             " LEFT JOIN reservations r ON (r.status = \"CAR\")"
@@ -149,7 +248,7 @@ def admin_car(car_id=0) :
     else :
         x = execute_sql_one(
             "SELECT"
-            " c.car_id, c.license_plate, c.mileage, c.image_car, c.car_status, c.model_id, brand, model, year, r.reservation_id"
+            " c.car_id, c.license_plate, c.mileage, c.image_car, c.gear, c.car_status, c.model_id, brand, model, year, r.reservation_id"
             " FROM cars c"
             " JOIN car_models USING (model_id)"
             " LEFT JOIN reservations r ON (r.status = \"CAR\")"
@@ -176,12 +275,13 @@ def admin_car(car_id=0) :
         "license_plate" : x[1],
         "mileage" : x[2],
         "image_car" : x[3],
-        "car_status" : x[4],
-        "model_id" : x[5],
-        "brand" : x[6],
-        "model" : x[7],
-        "year" : x[8],
-        "reservation_id" : x[9],
+        "gear" : x[4],
+        "car_status" : x[5],
+        "model_id" : x[6],
+        "brand" : x[7],
+        "model" : x[8],
+        "year" : x[9],
+        "reservation_id" : x[10],
 
         # mutating
         "permissions" : p

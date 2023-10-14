@@ -156,8 +156,12 @@ def profile_button() :
 
     return {
         "return" : "OK",
-        
+        "acc_id" : acc.id,
         "displayname" : acc.display_name,
+        "email" : acc.customer.email,
+        "first_name" : acc.customer.first_name,
+        "last_name" : acc.customer.last_name,
+        "phone" : acc.customer.phone,
         "picture" : acc.pfp_url
     }
 
