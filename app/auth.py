@@ -11,6 +11,7 @@ from app.utils.database import execute_sql_one
 from flask_jwt_extended import (
     create_access_token, jwt_required, get_jwt_identity,
     set_access_cookies, unset_jwt_cookies, get_jwt,
+    get_csrf_token,
 
     verify_jwt_in_request
 )
@@ -95,7 +96,8 @@ def google_login_auth() :
 
     # go bacc
     resp = jsonify({
-        "return" : returnstr[0]
+        "return" : returnstr[0],
+        "token" : get_csrf_token(token)
     })
     set_access_cookies(resp, token) # heres the token
     return resp, returnstr[1]
@@ -207,9 +209,10 @@ def admin_login() :
     })
 
     resp = jsonify({
-        "return" : "GRANTED"
+        "return" : "GRANTED",
+        "token" : get_csrf_token(token)
     })
-    set_access_cookies(resp, token, )
+    set_access_cookies(resp, token)
     return resp, 200
 
 def admin_required():

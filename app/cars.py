@@ -239,7 +239,7 @@ def admin_car(car_id=0) :
     if get_jwt()["role"] == "ROOT" :
         x = execute_sql_one(
             "SELECT"
-            " c.car_id, c.license_plate, c.mileage, c.image_car, c.gear, c.car_status, c.model_id, brand, model, year, r.reservation_id"
+            " c.car_id, c.license_plate, c.mileage, c.image_car, gear, c.car_status, c.model_id, brand, model, year, r.reservation_id"
             " FROM cars c"
             " JOIN car_models USING (model_id)"
             " LEFT JOIN reservations r ON (r.status = \"CAR\")"
@@ -248,7 +248,7 @@ def admin_car(car_id=0) :
     else :
         x = execute_sql_one(
             "SELECT"
-            " c.car_id, c.license_plate, c.mileage, c.image_car, c.gear, c.car_status, c.model_id, brand, model, year, r.reservation_id"
+            " c.car_id, c.license_plate, c.mileage, c.image_car, gear, c.car_status, c.model_id, brand, model, year, r.reservation_id"
             " FROM cars c"
             " JOIN car_models USING (model_id)"
             " LEFT JOIN reservations r ON (r.status = \"CAR\")"
@@ -316,7 +316,7 @@ def admin_models() :
     """ รุ่นรถทั้งหมด (มุมมองของพนักงาน) """
     results = execute_sql(
         "SELECT"
-        " model_id, brand, model, car_type, year, seats, fuel_type, price_per_day,"
+        " model_id, brand, model, car_type, year, seats, fuel_type, price_per_day, gear,"
         " COUNT(car_id) AS \"count\" FROM car_models"
         " LEFT JOIN cars USING (model_id)"
         " GROUP BY model_id"
@@ -331,7 +331,8 @@ def admin_models() :
             "seats" : x[5],
             "fuel_type" : x[6],
             "price_per_day" : x[7],
-            "count" : x[8]
+            "gear" : x[8],
+            "count" : x[9],
         } for x in results],
         "permissions" : dump_model_permission()
     }
@@ -342,7 +343,7 @@ def admin_model(model_id=0) :
     """ รุ่นรถ (มุมมองของพนักงาน) """
     x = execute_sql_one(
         "SELECT"
-        " model_id, brand, model, car_type, year, seats, fuel_type, price_per_day,"
+        " model_id, brand, model, car_type, year, seats, fuel_type, price_per_day, gear,"
         " COUNT(car_id) AS \"count\" FROM car_models"
         " LEFT JOIN cars USING (model_id)"
         " WHERE model_id = %s"
@@ -357,7 +358,8 @@ def admin_model(model_id=0) :
         "seats" : x[5],
         "fuel_type" : x[6],
         "price_per_day" : x[7],
-        "count" : x[8],
+        "gear" : x[8],
+        "count" : x[9],
 
         # mutating
         "permissions" : dump_model_permission()
@@ -473,7 +475,7 @@ def admin_edit_model(model_id=0) :
     data = request.get_json()
     return new_car_model_data(
         data,
-        "UPDATE car_models SET brand = %s, model = %s, car_type = %s, year = %s, seats = %s, fuel_type = %s, price_per_day = %s WHERE model_id = %s",
+        "UPDATE car_models SET brand = %s, model = %s, car_type = %s, year = %s, seats = %s, fuel_type = %s, price_per_day = %s, gear = %s WHERE model_id = %s",
         model_id,
         "Model updated"
     )
@@ -486,8 +488,8 @@ def admin_add_model() :
     data = request.get_json()
     return new_car_model_data(
         data,
-        "INSERT INTO car_models (brand, model, car_type, year, seats, fuel_type, price_per_day)"
-        " VALUES (%s, %s, %s, %s, %s, %s, %s)",
+        "INSERT INTO car_models (brand, model, car_type, year, seats, fuel_type, price_per_day, gear)"
+        " VALUES (%s, %s, %s, %s, %s, %s, %s, %s)",
         None,
         "Model added"
     )
@@ -517,11 +519,11 @@ def new_car_model_data(data, sql, target, msg) :
     if not data :
         return {"error" : "Invalid data"}, 400
 
-    if "brand" not in data or "model" not in data or "car_type" not in data or "year" not in data or "seats" not in data or "fuel_type" not in data or "price_per_day" not in data :
+    if "brand" not in data or "model" not in data or "car_type" not in data or "year" not in data or "seats" not in data or "fuel_type" not in data or "price_per_day" not in data or "gear" not in data :
         return {"error" : "Invalid data"}, 400
 
     params = [
-        data["brand"], data["model"], data["car_type"], data["year"], data["seats"], data["fuel_type"], data["price_per_day"]
+        data["brand"], data["model"], data["car_type"], data["year"], data["seats"], data["fuel_type"], data["price_per_day"], data["gear"]
     ]
 
     if target :
