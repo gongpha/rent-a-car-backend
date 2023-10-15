@@ -16,6 +16,7 @@ from app.booking import bp as booking_bp
 from app.customer import bp as customer_bp
 from app.cars import bp as cars_bp
 from app.reservations import bp as reservations_bp
+from app.stats import bp as stats_bp
 
 from .utils.database import init_db
 
@@ -60,6 +61,7 @@ def init_app() -> Flask :
     app.register_blueprint(customer_bp)
     app.register_blueprint(cars_bp)
     app.register_blueprint(reservations_bp)
+    app.register_blueprint(stats_bp)
     
     app.register_blueprint(playground_bp)
 

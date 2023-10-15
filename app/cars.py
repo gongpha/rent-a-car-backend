@@ -242,7 +242,7 @@ def admin_car(car_id=0) :
             " c.car_id, c.license_plate, c.mileage, c.image_car, gear, c.car_status, c.model_id, brand, model, year, r.reservation_id"
             " FROM cars c"
             " JOIN car_models USING (model_id)"
-            " LEFT JOIN reservations r ON (r.status = \"CAR\")"
+            " LEFT JOIN reservations r ON (r.status = \"CAR\" AND r.reservation_id = c.car_id)"
             " WHERE c.car_id = %s LIMIT 1", car_id
         )
     else :
@@ -251,7 +251,7 @@ def admin_car(car_id=0) :
             " c.car_id, c.license_plate, c.mileage, c.image_car, gear, c.car_status, c.model_id, brand, model, year, r.reservation_id"
             " FROM cars c"
             " JOIN car_models USING (model_id)"
-            " LEFT JOIN reservations r ON (r.status = \"CAR\")"
+            " LEFT JOIN reservations r ON (r.status = \"CAR\" AND r.reservation_id = c.car_id)"
             " WHERE c.car_id = %s AND branch_id = ("
             " SELECT branch_id FROM employees WHERE employee_id = ("
             " SELECT employee_id FROM web_accounts_emp WHERE username = %s"
