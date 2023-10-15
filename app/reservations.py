@@ -93,8 +93,8 @@ def admin_rsv_today(branch_id=0) :
         " ORDER BY start_datetime ASC")
         params.append(get_jwt_identity())
     else :
-        if branch_id == 0 :
-            return {}
+        if int(branch_id) == 0 :
+            return {'root' : True}
         sql = ("SELECT reservation_id, c_first_name, c_last_name,"
         " image_car AS car_image, license_plate AS car_plate,"
         " brand AS model_brand, model AS model_model, year AS model_year,"
