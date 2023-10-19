@@ -183,12 +183,37 @@ def check_date_overlap(start1, end1, start2, end2) -> bool :
 @bp.route("/reserve", methods=["POST"])
 def reserve() :
     """ จองรถ """
+    rrr = request.get_json()
+
+    # payment ?
+    cardholder = rrr.get("cardholder")
+    cardNumber = rrr.get("cardNumber")
+    cardExpiryMonth = rrr.get("cardExpiryMonth")
+    cardExpiryYear = rrr.get("cardExpiryYear")
+    cardCvc = rrr.get("cardCvc")
+    cardFromBank = rrr.get("cardFromBank")
+    cardCountry = rrr.get("cardCountry")
+    
+    if (
+        cardholder == None or
+        cardNumber == None or
+        cardExpiryMonth == None or
+        cardExpiryYear == None or
+        cardCvc == None or
+        cardFromBank == None or
+        cardCountry == None
+    ) :
+        return {"error" : "Missing payment information"}, 400
+    
+    cardNumber = cardNumber.replace(" ", "")
+    storeMyPaymentInfo = rrr.get("storeMyPaymentInfo")
+
     summary = craft_summary(True)
     if summary is tuple :
         return summary[0], summary[1]
     # check collision
 
-    rrr = request.get_json()
+    
 
     result = execute_sql_one(
         "SELECT reservation_id, start_datetime, end_datetime FROM reservations"
@@ -247,18 +272,72 @@ def reserve() :
             return {"error" : "Account not found"}, 404
         cust = acc.customer
     
-    hireDriver = int(rrr.get("hireDriver"))
-    if hireDriver :
-        r = execute_sql_one(
-            "SELECT employee_id FROM employees"
-            " LEFT JOIN reservations ON (employee_id = driver_employee_id)"
-            " WHERE job = \"DRIVER\" AND driver_employee_id IS NULL"
-        )
-        if r is None :
-            return {"error" : "No driver available"}, 400
+    # hireDriver = int(rrr.get("hireDriver"))
+    # if hireDriver :
+    #     r = execute_sql_one(
+    #         "SELECT employee_id FROM employees"
+    #         " LEFT JOIN reservations ON (employee_id = driver_employee_id)"
+    #         " WHERE job = \"DRIVER\" AND driver_employee_id IS NULL"
+    #     )
+    #     if r is None :
+    #         return {"error" : "No driver available"}, 400
         
+    # else :
+    #     r = (None,)
+
+    # payment
+    if storeMyPaymentInfo :
+        exist_payment = execute_sql_one(
+            "SELECT * FROM payment_info"
+            " WHERE customer_id = %s",
+            cust.id
+        )
+
+        if exist_payment :
+            # replace
+            sql3 = (
+                "UPDATE payment_info SET"
+                " cardholder = %s,"
+                " card_number = %s,"
+                " expiry_month = %s,"
+                " expiry_year = %s,"
+                " cvc = %s,"
+                " bank = %s,"
+                " country = %s"
+                " WHERE customer_id = %s",
+                (
+                    cardholder,
+                    cardNumber,
+                    cardExpiryMonth,
+                    cardExpiryYear,
+                    cardCvc,
+                    cardFromBank,
+                    cardCountry,
+                    cust.id
+                )
+            )
+        else :
+            # create
+            sql3 = (
+                "INSERT INTO payment_info"
+                " (customer_id, cardholder, card_number, expiry_month, expiry_year, cvc, bank, country)"
+                " VALUES"
+                " (%s, %s, %s, %s, %s, %s, %s, %s)",
+                (
+                    cust.id,
+                    cardholder,
+                    cardNumber,
+                    cardExpiryMonth,
+                    cardExpiryYear,
+                    cardCvc,
+                    cardFromBank,
+                    cardCountry
+                )
+            )
     else :
-        r = (None,)
+        sql3 = ("", [])
+
+    # pretend that we paid
 
     # create reservation
     sql1 = (
@@ -277,7 +356,7 @@ def reserve() :
             rrr.get("insuranceId"),
             summary[1]["start_date"],
             summary[1]["end_date"],
-            r[0],
+            None,
             rrr.get("branchStartID"),
             rrr.get("branchEndID"),
             "CAR",
@@ -291,8 +370,8 @@ def reserve() :
     )
 
     commit_sqls(
-        [x[0] for x in [sql1, sql2]],
-        [x[1] for x in [sql1, sql2]]
+        [x[0] for x in [sql1, sql2, sql3]],
+        [x[1] for x in [sql1, sql2, sql3]]
     )
 
     return {
