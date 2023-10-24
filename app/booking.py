@@ -5,6 +5,10 @@ from flask import request
 from datetime import datetime
 from .models.customer import Customer
 from .models.account import Account
+from .models.insurance import Insurance
+
+from .models.transaction import TransactionBill, TotalPrice, Transaction, DiscountCode
+
 import re
 
 from flask_jwt_extended import (
@@ -68,19 +72,22 @@ def driver_available() :
 @bp.route("/insurance/<ins_id>", methods=["GET"])
 def insurance(ins_id=0) :
     """ ประกันรถทั้งหมด """
-    x = execute_sql_one("SELECT * FROM insurance WHERE insurance_id = %s", ins_id)
+    x = Insurance.get_insurance(ins_id)
+    if x is None :
+        return {"error" : "Insurance not found"}, 404
+    
     return {
-        "insurance_id" : x[0],
-        "name" : x[1],
+        "insurance_id" : x.insurance_id,
+        "name" : x.insurance_type,
         "properties" : {
-            "bodily_injury" : x[2] == 'Y',
-            "vehicle_damage" : x[3] == 'Y',
-            "property_damage" : x[4] == 'Y',
-            "thief_fire" : x[5] == 'Y',
+            "bodily_injury" : x.bodily_injury == 'Y',
+            "vehicle_damage" : x.vehicle_damage == 'Y',
+            "property_damage" : x.property_damage == 'Y',
+            "thief_fire" : x.thief_fire == 'Y',
         },
         
-        "description" : x[6],
-        "cost_per_day" : x[7]
+        "description" : x.description,
+        "cost_per_day" : x.cost_per_day
     }
 
 @bp.route("/reserve/summary", methods=["GET"])
@@ -102,7 +109,9 @@ def craft_summary(use_form : bool) -> dict :
     carId = rrr.get("carId")
 
     insuranceId = rrr.get("insuranceId")
-    hireDriver = rrr.get("hireDriver")
+    hireDriver = rrr.get("hireDriver") # unused
+
+    discountCode = rrr.get("discountCode")
 
     if (
         branchStartID == None or
@@ -117,6 +126,8 @@ def craft_summary(use_form : bool) -> dict :
     realStartDate = datetime.strptime(startDate, "%Y-%m-%dT%H:%M:%S.%f%z").replace(tzinfo=None)
     realEndDate = datetime.strptime(endDate, "%Y-%m-%dT%H:%M:%S.%f%z").replace(tzinfo=None)
     length = (realEndDate - realStartDate).days + 1
+
+    code = DiscountCode.get_by_code(discountCode)
 
     price_per_day = execute_sql_one(
         "SELECT price_per_day FROM cars"
@@ -138,6 +149,9 @@ def craft_summary(use_form : bool) -> dict :
         hire_driver_cost_per_day = 1000
 
     per_day = price_per_day + cost_per_day + hire_driver_cost_per_day
+
+    if code :
+        per_day -= code.discount
 
     lll = [
         {
@@ -163,6 +177,21 @@ def craft_summary(use_form : bool) -> dict :
             {
                 "name" : "ค่าคนขับต่อวัน",
                 "value" : hire_driver_cost_per_day
+            }
+        )
+
+    if code is not None :
+        lll.insert(1,
+            {
+                "name" : "ส่วนลด",
+                "value" : -code.discount
+            }
+        )
+    elif discountCode is not None :
+        lll.insert(1,
+            {
+                "name" : "ส่วนลด (ไม่สามารถใช้งานได้)",
+                "value" : 0
             }
         )
 
@@ -193,6 +222,8 @@ def reserve() :
     cardCvc = rrr.get("cardCvc")
     cardFromBank = rrr.get("cardFromBank")
     cardCountry = rrr.get("cardCountry")
+
+    discountCode = rrr.get("discountCode")
     
     if (
         cardholder == None or
